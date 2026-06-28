@@ -6,6 +6,8 @@ import { enrichAlert } from './utils/insightsEngine';
 import { MetricCard } from './components/MetricCard';
 import { ControlPanel } from './components/ControlPanel';
 import { AlertPanel } from './components/AlertPanel';
+import { TopologyMap } from './components/TopologyMap';
+import { LandingPage } from './components/LandingPage';
 import { 
   Cpu, 
   Layers, 
@@ -15,25 +17,38 @@ import {
   Server, 
   TrendingUp,
   Radio,
-  CheckCircle2
+  Home
 } from 'lucide-react';
 
 export function App() {
+  const [view, setView] = useState('landing'); // 'landing' | 'dashboard'
   const { metrics, history, loading, error, isPrometheusConnected } = useMetricsPoller(5000);
   const [activeIncident, setActiveIncident] = useState(null);
   const [activeAlert, setActiveAlert] = useState(null);
   const [alertHistory, setAlertHistory] = useState([]);
+  const [logs, setLogs] = useState([
+    { time: new Date().toLocaleTimeString(), type: 'info', message: 'Initializing AI-OPS Observability Client...' },
+    { time: new Date().toLocaleTimeString(), type: 'info', message: 'Rule-based anomaly detection engine loaded.' }
+  ]);
   
   const previousMetricsRef = useRef(null);
   const lastAlertIdRef = useRef(null);
 
-  // Sync active incident type from backend health checks
+  // Helper: Append a new log to the terminal
+  const addLog = (type, message) => {
+    const time = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, { time, type, message }].slice(-100));
+  };
+
+  // Log connection status changes
   useEffect(() => {
-    if (metrics && metrics.anomaly_score !== undefined) {
-      // We can infer the incident state from the metrics or check if we need to update it
-      // Let's check if the anomaly score is high to set the incident state
+    if (view !== 'dashboard') return;
+    if (isPrometheusConnected) {
+      addLog('info', 'Successfully connected to Prometheus TSDB scraping pipeline.');
+    } else {
+      addLog('warn', 'Prometheus API unreachable. Switched to direct backend polling fallback.');
     }
-  }, [metrics]);
+  }, [isPrometheusConnected, view]);
 
   // Run Anomaly Detection and Correlation on every metric update
   useEffect(() => {
@@ -41,6 +56,14 @@ export function App() {
 
     // 1. Detect individual anomalies
     const { states: anomalyStates, list: anomalyList } = detectAnomalies(metrics);
+
+    // Log the scrape event and any individual breaches
+    if (view === 'dashboard') {
+      addLog('info', `Scraped telemetry. CPU: ${metrics.cpu_usage_percent}%, Latency: ${metrics.http_response_latency_ms}ms, Errors: ${metrics.application_error_rate_percent}%`);
+      anomalyList.forEach(anomaly => {
+        addLog('warn', `THRESHOLD BREACH: ${anomaly.name} is ${anomaly.value}${anomaly.unit} (Threshold: ${anomaly.threshold}${anomaly.unit})`);
+      });
+    }
 
     // 2. Correlate anomalies
     const correlation = correlateAnomalies(anomalyStates, metrics, previousMetricsRef.current);
@@ -50,9 +73,11 @@ export function App() {
     if (correlation.type) {
       // We have a correlated incident
       currentAlert = enrichAlert(correlation);
+      if (view === 'dashboard' && lastAlertIdRef.current !== correlation.type) {
+        addLog('error', `CORRELATION ENGINE: Grouped ${correlation.affectedMetrics.join(' & ').toUpperCase()} anomalies into [${correlation.name}] event.`);
+      }
     } else if (anomalyList.length > 0) {
       // No correlation, but we have individual metric breaches
-      // Enrich the highest priority one (e.g. error, then cpu, then others)
       const primaryAnomaly = anomalyList.find(a => a.metric === 'error') || anomalyList[0];
       currentAlert = enrichAlert(primaryAnomaly);
     }
@@ -61,36 +86,48 @@ export function App() {
     if (currentAlert) {
       setActiveAlert(currentAlert);
       
-      // If this is a new alert, push to history
       const alertKey = currentAlert.title || currentAlert.id;
       if (lastAlertIdRef.current !== alertKey) {
         setAlertHistory(prev => [currentAlert, ...prev].slice(0, 50));
         lastAlertIdRef.current = alertKey;
       }
     } else {
+      if (view === 'dashboard' && activeAlert) {
+        addLog('info', 'System metrics returned to normal. Clearing active alert.');
+      }
       setActiveAlert(null);
       lastAlertIdRef.current = null;
     }
 
     previousMetricsRef.current = metrics;
-  }, [metrics]);
+  }, [metrics, view]);
 
   // Handle state changes from the Control Panel
   const handleIncidentStateChange = (type) => {
     setActiveIncident(type);
+    if (type) {
+      addLog('info', `FAULT INJECTION: Triggered incident simulation profile [${type.toUpperCase()}].`);
+    } else {
+      addLog('info', 'SYSTEM RESET: Triggered recovery. Gradual cooldown phase initiated.');
+    }
   };
 
+  // Render Landing Page
+  if (view === 'landing') {
+    return <LandingPage onLaunch={() => setView('dashboard')} />;
+  }
+
+  // Render Loading state on first dashboard entry
   if (loading || !metrics) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center bg-dark-900 text-slate-100">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-        <p className="mt-4 text-sm text-slate-400">Loading AI-OPS Observability Data...</p>
-        {error && <p className="mt-2 text-xs text-red-400 max-w-md text-center">{error}</p>}
+        <p className="mt-4 text-sm text-slate-400 font-medium">Loading Command Center Telemetry...</p>
+        {error && <p className="mt-2 text-xs text-rose-400 max-w-md text-center">{error}</p>}
       </div>
     );
   }
 
-  // Define thresholds to display on cards
   const THRESHOLDS = {
     cpu: 80,
     memory: 85,
@@ -103,34 +140,42 @@ export function App() {
   const anomalyStates = metrics ? detectAnomalies(metrics).states : {};
 
   return (
-    <div className="min-h-full bg-dark-900 pb-12">
+    <div className="min-h-full bg-dark-900 pb-12 text-slate-100">
       {/* Top Header Navigation */}
-      <header className="border-b border-slate-800 bg-dark-800/40 backdrop-blur-md sticky top-0 z-50">
+      <header className="border-b border-slate-800/80 bg-dark-800/40 backdrop-blur-md sticky top-0 z-50 shadow-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]">
                 <Layers className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-base font-bold text-white leading-none">AI-OPS</h1>
-                <p className="text-[10px] text-slate-400 mt-1">Intelligent Monitoring & Anomaly Detection</p>
+                <h1 className="text-sm font-extrabold tracking-wider text-white uppercase leading-none">AI-OPS</h1>
+                <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-widest">Command Center</p>
               </div>
             </div>
 
-            {/* Connection Status Badges */}
-            <div className="flex items-center gap-3">
+            {/* Header Controls & Status */}
+            <div className="flex items-center gap-4">
               {isPrometheusConnected ? (
-                <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
+                <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
                   <Server className="h-3.5 w-3.5" />
-                  PROMETHEUS CONNECTED
+                  Prometheus Active
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 animate-pulse">
+                <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-[10px] font-bold tracking-wider text-amber-400 uppercase animate-pulse">
                   <Database className="h-3.5 w-3.5" />
-                  BACKEND FALLBACK ACTIVE
+                  API Fallback Active
                 </div>
               )}
+
+              <button
+                onClick={() => setView('landing')}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-dark-700/40 hover:bg-dark-700/70 px-4 py-2 text-xs font-bold text-slate-300 transition-all"
+              >
+                <Home className="h-4 w-4" />
+                Home
+              </button>
             </div>
           </div>
         </div>
@@ -139,14 +184,6 @@ export function App() {
       {/* Main Content Area */}
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-8 space-y-6">
         
-        {/* Connection/Data Error Warning */}
-        {error && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
         {/* Core Metric Cards Grid */}
         <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard 
@@ -191,62 +228,74 @@ export function App() {
           />
         </section>
 
-        {/* Auxiliary Metrics Row */}
-        <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {/* System Load Card */}
-          <div className="rounded-xl border border-slate-800 bg-dark-800/40 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-slate-800 p-2.5 text-slate-300">
-                <Server className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider">System Load</p>
-                <p className="text-lg font-bold text-white mt-0.5">{metrics.system_load}</p>
-              </div>
-            </div>
-            <span className="text-[10px] text-slate-500">Threshold: {THRESHOLDS.load}</span>
+        {/* Topology Map and Secondary Metrics Layout */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Topology Map (2/3 width) */}
+          <div className="lg:col-span-2">
+            <TopologyMap anomalyStates={anomalyStates} activeIncident={activeIncident} />
           </div>
 
-          {/* Anomaly Score Card */}
-          <div className="rounded-xl border border-slate-800 bg-dark-800/40 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-slate-800 p-2.5 text-slate-300">
-                <TrendingUp className="h-5 w-5" />
+          {/* Auxiliary Stats + Fault Control Panel (1/3 width) */}
+          <div className="space-y-6 flex flex-col justify-between">
+            {/* Aux Metrics Row */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* System Load Card */}
+              <div className="rounded-xl border border-slate-800/80 bg-dark-800/50 p-4 flex items-center gap-3">
+                <div className="rounded-lg bg-slate-800 p-2 text-slate-400">
+                  <Server className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">System Load</p>
+                  <p className="text-sm font-black text-white mt-0.5">{metrics.system_load}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider">Anomaly Score</p>
-                <p className="text-lg font-bold text-white mt-0.5">{metrics.anomaly_score}</p>
-              </div>
-            </div>
-            <span className="text-[10px] text-slate-500">Threshold: {THRESHOLDS.anomaly}</span>
-          </div>
 
-          {/* Active Processes Card */}
-          <div className="rounded-xl border border-slate-800 bg-dark-800/40 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-slate-800 p-2.5 text-slate-300">
-                <Radio className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider">Running Processes</p>
-                <p className="text-lg font-bold text-white mt-0.5">{metrics.running_processes}</p>
+              {/* Anomaly Score Card */}
+              <div className="rounded-xl border border-slate-800/80 bg-dark-800/50 p-4 flex items-center gap-3">
+                <div className="rounded-lg bg-slate-800 p-2 text-slate-400">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Anomaly Score</p>
+                  <p className={`text-sm font-black mt-0.5 ${metrics.anomaly_score > THRESHOLDS.anomaly ? 'text-rose-400' : 'text-white'}`}>
+                    {metrics.anomaly_score}
+                  </p>
+                </div>
               </div>
             </div>
-            <span className="text-[10px] text-slate-500">Normal: 120</span>
+
+            {/* Active Processes Card */}
+            <div className="rounded-xl border border-slate-800/80 bg-dark-800/50 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-slate-800 p-2 text-slate-400">
+                  <Radio className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Running Processes</p>
+                  <p className="text-sm font-black text-white mt-0.5">{metrics.running_processes}</p>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Normal: 120</span>
+            </div>
+
+            {/* Control Panel */}
+            <div className="flex-grow flex flex-col">
+              <ControlPanel 
+                activeIncident={activeIncident}
+                onStateChange={handleIncidentStateChange}
+              />
+            </div>
           </div>
+        </div>
+
+        {/* Alert Correlation & Live Terminal Section */}
+        <section>
+          <AlertPanel 
+            activeAlert={activeAlert}
+            alertHistory={alertHistory}
+            logs={logs}
+          />
         </section>
-
-        {/* Control Panel Section */}
-        <ControlPanel 
-          activeIncident={activeIncident}
-          onStateChange={handleIncidentStateChange}
-        />
-
-        {/* Alert Correlation & Insights Section */}
-        <AlertPanel 
-          activeAlert={activeAlert}
-          alertHistory={alertHistory}
-        />
 
       </main>
     </div>
