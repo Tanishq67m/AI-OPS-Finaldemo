@@ -111,14 +111,14 @@ This project was designed, developed, and validated by a team of 4 members:
   * Implemented the simulation and recovery REST APIs (`POST /api/simulate`, `POST /api/reset`).
   * Set up Docker Compose configurations for the multi-service stack.
 
-### 2. Vaishnavi Landge (B400780292) — Frontend Developer & UI/UX Designer
+### 2. Gayatri Parkhe (B400780302) — Frontend Developer & UI/UX Designer
 * **Responsibilities:**
   * Designed and built the responsive, glassmorphic React dashboard.
   * Created the futuristic landing page (`LandingPage.jsx`) and security login gate (`LoginPage.jsx`).
   * Integrated Recharts to render real-time, animated sparkline charts for telemetry tracking.
   * Developed the `MetricCard`, `ControlPanel`, and `AlertPanel` components.
 
-### 3. Gayatri Parkhe (B400780302) — DevOps & Observability Engineer
+### 3. Vaishnavi Landge (B400780292) — DevOps & Observability Engineer
 * **Responsibilities:**
   * Configured Prometheus scraping targets and evaluation intervals.
   * Wrote the Prometheus alerting rules (`alert_rules.yml`) for threshold breaches.
