@@ -1,0 +1,38 @@
+groups:
+  - name: aiops_alerts
+    rules:
+      - alert: HighLoadAlert
+        expr: cpu_usage_percent > 80
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU load detected"
+          description: "CPU usage has exceeded 80% (current value: {{ $value }}%)"
+
+      - alert: MemoryPressureAlert
+        expr: memory_usage_percent > 85
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory pressure detected"
+          description: "Memory usage has exceeded 85% (current value: {{ $value }}%)"
+
+      - alert: PerformanceAlert
+        expr: http_response_latency_ms > 500
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP response latency detected"
+          description: "Latency has exceeded 500ms (current value: {{ $value }}ms)"
+
+      - alert: FailureAlert
+        expr: application_error_rate_percent > 5
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High application error rate detected"
+          description: "Error rate has exceeded 5% (current value: {{ $value }}%)"
