@@ -8,6 +8,7 @@ import { ControlPanel } from './components/ControlPanel';
 import { AlertPanel } from './components/AlertPanel';
 import { TopologyMap } from './components/TopologyMap';
 import { LandingPage } from './components/LandingPage';
+import { LoginPage } from './components/LoginPage';
 import { 
   Cpu, 
   Layers, 
@@ -21,10 +22,10 @@ import {
 } from 'lucide-react';
 
 export function App() {
-  const [view, setView] = useState('landing'); // 'landing' | 'dashboard'
-  const [selectedSystem, setSelectedSystem] = useState('production'); // 'production' | 'staging' | 'billing'
+  const [view, setView] = useState('landing'); // 'landing' | 'login' | 'dashboard'
+  const [selectedSystem, setSelectedSystem] = useState('production'); // 'production' | 'host'
   const [forceDegraded, setForceDegraded] = useState(false);
-  const { metrics, history, loading, error, isPrometheusConnected } = useMetricsPoller(5000);
+  const { metrics, history, loading, error, isPrometheusConnected } = useMetricsPoller(5000, selectedSystem);
   const [activeIncident, setActiveIncident] = useState(null);
   const [activeAlert, setActiveAlert] = useState(null);
   const [alertHistory, setAlertHistory] = useState([]);
@@ -36,11 +37,10 @@ export function App() {
   const previousMetricsRef = useRef(null);
   const lastAlertIdRef = useRef(null);
 
-  // Generate mock metrics for staging & billing to demonstrate multi-system support
   const getActiveMetrics = () => {
     if (!metrics) return null;
 
-    if (forceDegraded) {
+    if (forceDegraded && selectedSystem === 'production') {
       return {
         cpu_usage_percent: 96.8,
         memory_usage_percent: 98.1,
@@ -49,31 +49,6 @@ export function App() {
         system_load: 6.8,
         anomaly_score: 0.97,
         running_processes: 210
-      };
-    }
-
-    if (selectedSystem === 'staging') {
-      return {
-        cpu_usage_percent: Math.round((15 + Math.random() * 5) * 100) / 100,
-        memory_usage_percent: Math.round((32 + Math.random() * 3) * 100) / 100,
-        http_response_latency_ms: Math.round((45 + Math.random() * 10) * 100) / 100,
-        application_error_rate_percent: 0.05,
-        system_load: 0.6,
-        anomaly_score: 0.08,
-        running_processes: 85
-      };
-    }
-
-    if (selectedSystem === 'billing') {
-      return {
-        cpu_usage_percent: Math.round((42 + Math.random() * 8) * 100) / 100,
-        memory_usage_percent: Math.round((65 + Math.random() * 4) * 100) / 100,
-        // Billing gateway has a slight latency warning to show different system behavior
-        http_response_latency_ms: Math.round((410 + Math.random() * 30) * 100) / 100,
-        application_error_rate_percent: 0.8,
-        system_load: 2.1,
-        anomaly_score: 0.35,
-        running_processes: 145
       };
     }
 
@@ -92,11 +67,11 @@ export function App() {
   useEffect(() => {
     if (view !== 'dashboard') return;
     if (isPrometheusConnected) {
-      addLog('info', 'Successfully connected to Prometheus TSDB scraping pipeline.');
+      addLog('info', `Successfully connected to Prometheus TSDB scraping pipeline for ${selectedSystem === 'host' ? 'Host Workstation' : 'Application Cluster'}.`);
     } else {
       addLog('warn', 'Prometheus API unreachable. Switched to direct backend polling fallback.');
     }
-  }, [isPrometheusConnected, view]);
+  }, [isPrometheusConnected, view, selectedSystem]);
 
   // Run Anomaly Detection and Correlation on every metric update
   useEffect(() => {
@@ -163,7 +138,12 @@ export function App() {
 
   // Render Landing Page
   if (view === 'landing') {
-    return <LandingPage onLaunch={() => setView('dashboard')} />;
+    return <LandingPage onLaunch={() => setView('login')} />;
+  }
+
+  // Render Login Page
+  if (view === 'login') {
+    return <LoginPage onLogin={() => setView('dashboard')} onBack={() => setView('landing')} />;
   }
 
   // Render Loading state on first dashboard entry
@@ -207,22 +187,16 @@ export function App() {
             {/* System Selector Tabs */}
             <div className="flex bg-slate-950/80 border border-slate-800/60 rounded-xl p-1 text-xs">
               <button
-                onClick={() => { setSelectedSystem('production'); addLog('info', 'Switched view to system: Production Cluster (Node-01).'); }}
+                onClick={() => { setSelectedSystem('production'); addLog('info', 'Switched view to system: Application Server (Simulated).'); }}
                 className={`px-3 py-1.5 rounded-lg font-bold transition-all ${selectedSystem === 'production' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
-                Production
+                Application Server (Simulated)
               </button>
               <button
-                onClick={() => { setSelectedSystem('staging'); addLog('info', 'Switched view to system: Staging Server (Node-02).'); }}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${selectedSystem === 'staging' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                onClick={() => { setSelectedSystem('host'); addLog('info', 'Switched view to system: Host Workstation (Real Telemetry).'); }}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${selectedSystem === 'host' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
-                Staging
-              </button>
-              <button
-                onClick={() => { setSelectedSystem('billing'); addLog('info', 'Switched view to system: Billing Gateway (Node-03).'); }}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${selectedSystem === 'billing' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-              >
-                Billing GW
+                Host Workstation (Real Telemetry)
               </button>
             </div>
 
@@ -303,7 +277,7 @@ export function App() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Topology Map (2/3 width) */}
           <div className="lg:col-span-2">
-            <TopologyMap anomalyStates={anomalyStates} activeIncident={activeIncident} />
+            <TopologyMap anomalyStates={anomalyStates} activeIncident={activeIncident} selectedSystem={selectedSystem} />
           </div>
 
           {/* Auxiliary Stats + Fault Control Panel (1/3 width) */}

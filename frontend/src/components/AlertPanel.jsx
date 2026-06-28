@@ -9,12 +9,16 @@ const SEVERITY_COLORS = {
 };
 
 export function AlertPanel({ activeAlert, alertHistory, logs }) {
-  const terminalEndRef = useRef(null);
+  const terminalRef = useRef(null);
 
-  // Auto-scroll terminal to bottom on new logs
+  // Auto-scroll terminal to bottom only if user is already near the bottom
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    const term = terminalRef.current;
+    if (term) {
+      const isNearBottom = term.scrollHeight - term.clientHeight - term.scrollTop < 60;
+      if (isNearBottom) {
+        term.scrollTop = term.scrollHeight;
+      }
     }
   }, [logs]);
 
@@ -131,7 +135,7 @@ export function AlertPanel({ activeAlert, alertHistory, logs }) {
           <Terminal className="h-4 w-4 text-emerald-400" />
           Live Operational Logs
         </h2>
-        <div className="h-44 w-full overflow-y-auto rounded-xl bg-[#030712] border border-slate-950 p-4 font-mono text-[11px] text-emerald-400 shadow-inner leading-relaxed">
+        <div ref={terminalRef} className="h-44 w-full overflow-y-auto rounded-xl bg-[#030712] border border-slate-950 p-4 font-mono text-[11px] text-emerald-400 shadow-inner leading-relaxed">
           {logs.map((log, idx) => (
             <div key={idx} className="flex items-start gap-2 py-0.5">
               <span className="text-slate-500 select-none">[{log.time}]</span>
@@ -140,7 +144,6 @@ export function AlertPanel({ activeAlert, alertHistory, logs }) {
               </span>
             </div>
           ))}
-          <div ref={terminalEndRef} />
         </div>
       </div>
     </div>
