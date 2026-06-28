@@ -22,6 +22,8 @@ import {
 
 export function App() {
   const [view, setView] = useState('landing'); // 'landing' | 'dashboard'
+  const [selectedSystem, setSelectedSystem] = useState('production'); // 'production' | 'staging' | 'billing'
+  const [forceDegraded, setForceDegraded] = useState(false);
   const { metrics, history, loading, error, isPrometheusConnected } = useMetricsPoller(5000);
   const [activeIncident, setActiveIncident] = useState(null);
   const [activeAlert, setActiveAlert] = useState(null);
@@ -33,6 +35,52 @@ export function App() {
   
   const previousMetricsRef = useRef(null);
   const lastAlertIdRef = useRef(null);
+
+  // Generate mock metrics for staging & billing to demonstrate multi-system support
+  const getActiveMetrics = () => {
+    if (!metrics) return null;
+
+    if (forceDegraded) {
+      return {
+        cpu_usage_percent: 96.8,
+        memory_usage_percent: 98.1,
+        http_response_latency_ms: 987,
+        application_error_rate_percent: 11.2,
+        system_load: 6.8,
+        anomaly_score: 0.97,
+        running_processes: 210
+      };
+    }
+
+    if (selectedSystem === 'staging') {
+      return {
+        cpu_usage_percent: Math.round((15 + Math.random() * 5) * 100) / 100,
+        memory_usage_percent: Math.round((32 + Math.random() * 3) * 100) / 100,
+        http_response_latency_ms: Math.round((45 + Math.random() * 10) * 100) / 100,
+        application_error_rate_percent: 0.05,
+        system_load: 0.6,
+        anomaly_score: 0.08,
+        running_processes: 85
+      };
+    }
+
+    if (selectedSystem === 'billing') {
+      return {
+        cpu_usage_percent: Math.round((42 + Math.random() * 8) * 100) / 100,
+        memory_usage_percent: Math.round((65 + Math.random() * 4) * 100) / 100,
+        // Billing gateway has a slight latency warning to show different system behavior
+        http_response_latency_ms: Math.round((410 + Math.random() * 30) * 100) / 100,
+        application_error_rate_percent: 0.8,
+        system_load: 2.1,
+        anomaly_score: 0.35,
+        running_processes: 145
+      };
+    }
+
+    return metrics;
+  };
+
+  const activeMetrics = getActiveMetrics();
 
   // Helper: Append a new log to the terminal
   const addLog = (type, message) => {
@@ -52,21 +100,21 @@ export function App() {
 
   // Run Anomaly Detection and Correlation on every metric update
   useEffect(() => {
-    if (!metrics) return;
+    if (!activeMetrics) return;
 
     // 1. Detect individual anomalies
-    const { states: anomalyStates, list: anomalyList } = detectAnomalies(metrics);
+    const { states: anomalyStates, list: anomalyList } = detectAnomalies(activeMetrics);
 
     // Log the scrape event and any individual breaches
     if (view === 'dashboard') {
-      addLog('info', `Scraped telemetry. CPU: ${metrics.cpu_usage_percent}%, Latency: ${metrics.http_response_latency_ms}ms, Errors: ${metrics.application_error_rate_percent}%`);
+      addLog('info', `[${selectedSystem.toUpperCase()}] Scraped telemetry. CPU: ${activeMetrics.cpu_usage_percent}%, Latency: ${activeMetrics.http_response_latency_ms}ms, Errors: ${activeMetrics.application_error_rate_percent}%`);
       anomalyList.forEach(anomaly => {
-        addLog('warn', `THRESHOLD BREACH: ${anomaly.name} is ${anomaly.value}${anomaly.unit} (Threshold: ${anomaly.threshold}${anomaly.unit})`);
+        addLog('warn', `[${selectedSystem.toUpperCase()}] THRESHOLD BREACH: ${anomaly.name} is ${anomaly.value}${anomaly.unit} (Threshold: ${anomaly.threshold}${anomaly.unit})`);
       });
     }
 
     // 2. Correlate anomalies
-    const correlation = correlateAnomalies(anomalyStates, metrics, previousMetricsRef.current);
+    const correlation = correlateAnomalies(anomalyStates, activeMetrics, previousMetricsRef.current);
 
     let currentAlert = null;
 
@@ -74,7 +122,7 @@ export function App() {
       // We have a correlated incident
       currentAlert = enrichAlert(correlation);
       if (view === 'dashboard' && lastAlertIdRef.current !== correlation.type) {
-        addLog('error', `CORRELATION ENGINE: Grouped ${correlation.affectedMetrics.join(' & ').toUpperCase()} anomalies into [${correlation.name}] event.`);
+        addLog('error', `[${selectedSystem.toUpperCase()}] CORRELATION ENGINE: Grouped ${correlation.affectedMetrics.join(' & ').toUpperCase()} anomalies into [${correlation.name}] event.`);
       }
     } else if (anomalyList.length > 0) {
       // No correlation, but we have individual metric breaches
@@ -93,14 +141,14 @@ export function App() {
       }
     } else {
       if (view === 'dashboard' && activeAlert) {
-        addLog('info', 'System metrics returned to normal. Clearing active alert.');
+        addLog('info', `[${selectedSystem.toUpperCase()}] System metrics returned to normal. Clearing active alert.`);
       }
       setActiveAlert(null);
       lastAlertIdRef.current = null;
     }
 
-    previousMetricsRef.current = metrics;
-  }, [metrics, view]);
+    previousMetricsRef.current = activeMetrics;
+  }, [activeMetrics, view]);
 
   // Handle state changes from the Control Panel
   const handleIncidentStateChange = (type) => {
@@ -108,6 +156,7 @@ export function App() {
     if (type) {
       addLog('info', `FAULT INJECTION: Triggered incident simulation profile [${type.toUpperCase()}].`);
     } else {
+      setForceDegraded(false); // Clear forced degradation on reset
       addLog('info', 'SYSTEM RESET: Triggered recovery. Gradual cooldown phase initiated.');
     }
   };
@@ -118,7 +167,7 @@ export function App() {
   }
 
   // Render Loading state on first dashboard entry
-  if (loading || !metrics) {
+  if (loading || !activeMetrics) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center bg-dark-900 text-slate-100">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
@@ -137,7 +186,7 @@ export function App() {
     anomaly: 0.7
   };
 
-  const anomalyStates = metrics ? detectAnomalies(metrics).states : {};
+  const anomalyStates = activeMetrics ? detectAnomalies(activeMetrics).states : {};
 
   return (
     <div className="min-h-full bg-dark-900 pb-12 text-slate-100">
@@ -149,23 +198,45 @@ export function App() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]">
                 <Layers className="h-6 w-6" />
               </div>
-              <div>
-                <h1 className="text-sm font-extrabold tracking-wider text-white uppercase leading-none">AI-OPS</h1>
+              <div className="hidden sm:block">
+                <h1 className="text-sm font-extrabold tracking-wider text-white leading-none">AI-OPS</h1>
                 <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-widest">Command Center</p>
               </div>
+            </div>
+
+            {/* System Selector Tabs */}
+            <div className="flex bg-slate-950/80 border border-slate-800/60 rounded-xl p-1 text-xs">
+              <button
+                onClick={() => { setSelectedSystem('production'); addLog('info', 'Switched view to system: Production Cluster (Node-01).'); }}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${selectedSystem === 'production' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                Production
+              </button>
+              <button
+                onClick={() => { setSelectedSystem('staging'); addLog('info', 'Switched view to system: Staging Server (Node-02).'); }}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${selectedSystem === 'staging' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                Staging
+              </button>
+              <button
+                onClick={() => { setSelectedSystem('billing'); addLog('info', 'Switched view to system: Billing Gateway (Node-03).'); }}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${selectedSystem === 'billing' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                Billing GW
+              </button>
             </div>
 
             {/* Header Controls & Status */}
             <div className="flex items-center gap-4">
               {isPrometheusConnected ? (
-                <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
+                <div className="hidden md:flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
                   <Server className="h-3.5 w-3.5" />
-                  Prometheus Active
+                  Prometheus
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-[10px] font-bold tracking-wider text-amber-400 uppercase animate-pulse">
+                <div className="hidden md:flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-[10px] font-bold tracking-wider text-amber-400 uppercase animate-pulse">
                   <Database className="h-3.5 w-3.5" />
-                  API Fallback Active
+                  API Fallback
                 </div>
               )}
 
@@ -188,7 +259,7 @@ export function App() {
         <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard 
             name="CPU Utilization"
-            value={metrics.cpu_usage_percent}
+            value={activeMetrics.cpu_usage_percent}
             unit="%"
             icon={Cpu}
             history={history}
@@ -198,7 +269,7 @@ export function App() {
           />
           <MetricCard 
             name="Memory Utilization"
-            value={metrics.memory_usage_percent}
+            value={activeMetrics.memory_usage_percent}
             unit="%"
             icon={Database}
             history={history}
@@ -208,7 +279,7 @@ export function App() {
           />
           <MetricCard 
             name="Response Latency"
-            value={metrics.http_response_latency_ms}
+            value={activeMetrics.http_response_latency_ms}
             unit="ms"
             icon={Activity}
             history={history}
@@ -218,7 +289,7 @@ export function App() {
           />
           <MetricCard 
             name="Application Error Rate"
-            value={metrics.application_error_rate_percent}
+            value={activeMetrics.application_error_rate_percent}
             unit="%"
             icon={AlertTriangle}
             history={history}
@@ -246,7 +317,7 @@ export function App() {
                 </div>
                 <div>
                   <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">System Load</p>
-                  <p className="text-sm font-black text-white mt-0.5">{metrics.system_load}</p>
+                  <p className="text-sm font-black text-white mt-0.5">{activeMetrics.system_load}</p>
                 </div>
               </div>
 
@@ -257,8 +328,8 @@ export function App() {
                 </div>
                 <div>
                   <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Anomaly Score</p>
-                  <p className={`text-sm font-black mt-0.5 ${metrics.anomaly_score > THRESHOLDS.anomaly ? 'text-rose-400' : 'text-white'}`}>
-                    {metrics.anomaly_score}
+                  <p className={`text-sm font-black mt-0.5 ${activeMetrics.anomaly_score > THRESHOLDS.anomaly ? 'text-rose-400' : 'text-white'}`}>
+                    {activeMetrics.anomaly_score}
                   </p>
                 </div>
               </div>
@@ -272,7 +343,7 @@ export function App() {
                 </div>
                 <div>
                   <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Running Processes</p>
-                  <p className="text-sm font-black text-white mt-0.5">{metrics.running_processes}</p>
+                  <p className="text-sm font-black text-white mt-0.5">{activeMetrics.running_processes}</p>
                 </div>
               </div>
               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Normal: 120</span>
@@ -283,6 +354,15 @@ export function App() {
               <ControlPanel 
                 activeIncident={activeIncident}
                 onStateChange={handleIncidentStateChange}
+                forceDegraded={forceDegraded}
+                setForceDegraded={(val) => {
+                  setForceDegraded(val);
+                  if (val) {
+                    addLog('error', 'CRITICAL DEGRADATION: Forced system failure mode active.');
+                  } else {
+                    addLog('info', 'DEGRADATION CLEARED: Reverted to standard telemetry.');
+                  }
+                }}
               />
             </div>
           </div>
