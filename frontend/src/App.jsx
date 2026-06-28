@@ -80,11 +80,12 @@ export function App() {
     setActiveIncident(type);
   };
 
-  if (loading) {
+  if (loading || !metrics) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center bg-dark-900 text-slate-100">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
         <p className="mt-4 text-sm text-slate-400">Loading AI-OPS Observability Data...</p>
+        {error && <p className="mt-2 text-xs text-red-400 max-w-md text-center">{error}</p>}
       </div>
     );
   }

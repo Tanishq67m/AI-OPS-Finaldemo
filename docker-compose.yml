@@ -13,6 +13,9 @@ services:
     container_name: aiops_frontend
     ports:
       - "5173:5173"
+    environment:
+      - BACKEND_URL=http://backend:3001
+      - PROMETHEUS_URL=http://prometheus:9090
     depends_on:
       - backend
       - prometheus
