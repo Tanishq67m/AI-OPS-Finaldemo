@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useMetricsPoller } from './hooks/useMetricsPoller';
 import { detectAnomalies } from './utils/anomalyDetector';
 import { correlateAnomalies } from './utils/correlationEngine';
@@ -18,17 +19,117 @@ import {
   Server, 
   TrendingUp,
   Radio,
-  Home
+  LogOut,
+  ShieldCheck,
+  User as UserIcon,
+  Wrench,
+  Info
 } from 'lucide-react';
 
-export function App() {
-  const [view, setView] = useState('landing'); // 'landing' | 'login' | 'dashboard'
-  const [selectedSystem, setSelectedSystem] = useState('production'); // 'production' | 'host'
+// Verification Hub Modal Component
+function VerificationModal({ isOpen, onClose, metrics, isPrometheusConnected, selectedSystem }) {
+  if (!isOpen) return null;
+
+  const promqlQueries = {
+    production: {
+      cpu: 'cpu_usage_percent',
+      memory: 'memory_usage_percent',
+      latency: 'http_response_latency_ms',
+      error: 'application_error_rate_percent'
+    },
+    host: {
+      cpu: '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)',
+      memory: '100 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100)',
+      load: 'node_load1',
+      processes: 'node_procs_running'
+    }
+  };
+
+  const queries = selectedSystem === 'host' ? promqlQueries.host : promqlQueries.production;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-[#0b0e1a] p-6 shadow-2xl overflow-hidden max-h-[85vh] flex flex-col justify-between">
+        <div>
+          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-blue-500" />
+              Telemetry Verification Hub
+            </h3>
+            <button onClick={onClose} className="text-slate-500 hover:text-white font-bold text-xs transition-colors">✕ Close</button>
+          </div>
+
+          <div className="mt-6 space-y-4 overflow-y-auto pr-2 max-h-[55vh]">
+            {/* Status Section */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-xl bg-[#070a14] border border-slate-900 p-4">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active DataSource</p>
+                <p className={`text-xs font-black mt-1 ${isPrometheusConnected ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {isPrometheusConnected ? 'Prometheus TSDB (Genuine)' : 'Express REST API (Fallback)'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-[#070a14] border border-slate-900 p-4">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Monitored PC</p>
+                <p className="text-xs font-black mt-1 text-white">
+                  {selectedSystem === 'host' ? 'Local Host Workstation' : 'Simulated Application Cluster'}
+                </p>
+              </div>
+            </div>
+
+            {/* Proof of Legitimacy Guide */}
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-xs text-slate-300 space-y-2">
+              <p className="font-bold text-white flex items-center gap-1">🛡️ How to Prove Genuineness to an Examiner:</p>
+              <ul className="list-disc list-inside space-y-2 text-[11px] text-slate-400">
+                <li><span className="text-white font-semibold">Live System Sync:</span> Open your Mac Activity Monitor (CPU/Memory). Switch to the "Host Workstation" tab here and observe that they match.</li>
+                <li><span className="text-white font-semibold">Stress Testing:</span> Run <code className="bg-[#03050a] px-1.5 py-0.5 rounded text-rose-400 font-mono">yes &gt; /dev/null &amp;</code> in your terminal. You will immediately see the CPU utilization circular gauge spike on this dashboard. Kill the process to see it cool down.</li>
+                <li><span className="text-white font-semibold">Direct TSDB Verification:</span> Copy the PromQL queries below and run them directly at <a href="http://localhost:9090" target="_blank" rel="noreferrer" className="text-blue-400 underline">http://localhost:9090</a>.</li>
+              </ul>
+            </div>
+
+            {/* PromQL Queries */}
+            <div className="space-y-2.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active PromQL Queries for this view:</p>
+              {Object.keys(queries).map(key => (
+                <div key={key} className="rounded-xl bg-[#03050a] border border-slate-900 p-3 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase">
+                    <span>{key} metric</span>
+                    <span className="text-emerald-400 font-mono">value: {metrics?.[key === 'cpu' ? 'cpu_usage_percent' : key === 'memory' ? 'memory_usage_percent' : key === 'load' ? 'system_load' : key === 'processes' ? 'running_processes' : key] ?? 'N/A'}</span>
+                  </div>
+                  <code className="text-[10px] text-blue-400 font-mono select-all break-all">{queries[key]}</code>
+                </div>
+              ))}
+            </div>
+
+            {/* Raw JSON Payload */}
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Raw Scraping JSON Payload:</p>
+              <pre className="rounded-xl bg-[#03050a] border border-slate-900 p-4 font-mono text-[10px] text-emerald-400 overflow-x-auto max-h-[150px] leading-relaxed">
+                {JSON.stringify(metrics, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full mt-6 rounded-xl bg-slate-800 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-700 transition-all"
+        >
+          Acknowledge & Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Dashboard View Component containing the core dashboard logic
+function DashboardView({ user, onLogout }) {
+  const [selectedSystem, setSelectedSystem] = useState(user.defaultSystem);
   const [forceDegraded, setForceDegraded] = useState(false);
   const { metrics, history, loading, error, isPrometheusConnected } = useMetricsPoller(5000, selectedSystem);
   const [activeIncident, setActiveIncident] = useState(null);
   const [activeAlert, setActiveAlert] = useState(null);
   const [alertHistory, setAlertHistory] = useState([]);
+  const [showVerification, setShowVerification] = useState(false);
   const [logs, setLogs] = useState([
     { time: new Date().toLocaleTimeString(), type: 'info', message: 'Initializing AI-OPS Observability Client...' },
     { time: new Date().toLocaleTimeString(), type: 'info', message: 'Rule-based anomaly detection engine loaded.' }
@@ -65,13 +166,12 @@ export function App() {
 
   // Log connection status changes
   useEffect(() => {
-    if (view !== 'dashboard') return;
     if (isPrometheusConnected) {
       addLog('info', `Successfully connected to Prometheus TSDB scraping pipeline for ${selectedSystem === 'host' ? 'Host Workstation' : 'Application Cluster'}.`);
     } else {
       addLog('warn', 'Prometheus API unreachable. Switched to direct backend polling fallback.');
     }
-  }, [isPrometheusConnected, view, selectedSystem]);
+  }, [isPrometheusConnected, selectedSystem]);
 
   // Run Anomaly Detection and Correlation on every metric update
   useEffect(() => {
@@ -81,12 +181,10 @@ export function App() {
     const { states: anomalyStates, list: anomalyList } = detectAnomalies(activeMetrics);
 
     // Log the scrape event and any individual breaches
-    if (view === 'dashboard') {
-      addLog('info', `[${selectedSystem.toUpperCase()}] Scraped telemetry. CPU: ${activeMetrics.cpu_usage_percent}%, Latency: ${activeMetrics.http_response_latency_ms}ms, Errors: ${activeMetrics.application_error_rate_percent}%`);
-      anomalyList.forEach(anomaly => {
-        addLog('warn', `[${selectedSystem.toUpperCase()}] THRESHOLD BREACH: ${anomaly.name} is ${anomaly.value}${anomaly.unit} (Threshold: ${anomaly.threshold}${anomaly.unit})`);
-      });
-    }
+    addLog('info', `[${selectedSystem.toUpperCase()}] Scraped telemetry. CPU: ${activeMetrics.cpu_usage_percent}%, Latency: ${activeMetrics.http_response_latency_ms}ms, Errors: ${activeMetrics.application_error_rate_percent}%`);
+    anomalyList.forEach(anomaly => {
+      addLog('warn', `[${selectedSystem.toUpperCase()}] THRESHOLD BREACH: ${anomaly.name} is ${anomaly.value}${anomaly.unit} (Threshold: ${anomaly.threshold}${anomaly.unit})`);
+    });
 
     // 2. Correlate anomalies
     const correlation = correlateAnomalies(anomalyStates, activeMetrics, previousMetricsRef.current);
@@ -94,13 +192,11 @@ export function App() {
     let currentAlert = null;
 
     if (correlation.type) {
-      // We have a correlated incident
       currentAlert = enrichAlert(correlation);
-      if (view === 'dashboard' && lastAlertIdRef.current !== correlation.type) {
+      if (lastAlertIdRef.current !== correlation.type) {
         addLog('error', `[${selectedSystem.toUpperCase()}] CORRELATION ENGINE: Grouped ${correlation.affectedMetrics.join(' & ').toUpperCase()} anomalies into [${correlation.name}] event.`);
       }
     } else if (anomalyList.length > 0) {
-      // No correlation, but we have individual metric breaches
       const primaryAnomaly = anomalyList.find(a => a.metric === 'error') || anomalyList[0];
       currentAlert = enrichAlert(primaryAnomaly);
     }
@@ -115,7 +211,7 @@ export function App() {
         lastAlertIdRef.current = alertKey;
       }
     } else {
-      if (view === 'dashboard' && activeAlert) {
+      if (activeAlert) {
         addLog('info', `[${selectedSystem.toUpperCase()}] System metrics returned to normal. Clearing active alert.`);
       }
       setActiveAlert(null);
@@ -123,7 +219,7 @@ export function App() {
     }
 
     previousMetricsRef.current = activeMetrics;
-  }, [activeMetrics, view]);
+  }, [activeMetrics, selectedSystem]);
 
   // Handle state changes from the Control Panel
   const handleIncidentStateChange = (type) => {
@@ -131,25 +227,15 @@ export function App() {
     if (type) {
       addLog('info', `FAULT INJECTION: Triggered incident simulation profile [${type.toUpperCase()}].`);
     } else {
-      setForceDegraded(false); // Clear forced degradation on reset
+      setForceDegraded(false);
       addLog('info', 'SYSTEM RESET: Triggered recovery. Gradual cooldown phase initiated.');
     }
   };
 
-  // Render Landing Page
-  if (view === 'landing') {
-    return <LandingPage onLaunch={() => setView('login')} />;
-  }
-
-  // Render Login Page
-  if (view === 'login') {
-    return <LoginPage onLogin={() => setView('dashboard')} onBack={() => setView('landing')} />;
-  }
-
-  // Render Loading state on first dashboard entry
+  // Render Loading state
   if (loading || !activeMetrics) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center bg-dark-900 text-slate-100">
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-dark-900 text-slate-100">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
         <p className="mt-4 text-sm text-slate-400 font-medium">Loading Command Center Telemetry...</p>
         {error && <p className="mt-2 text-xs text-rose-400 max-w-md text-center">{error}</p>}
@@ -169,7 +255,16 @@ export function App() {
   const anomalyStates = activeMetrics ? detectAnomalies(activeMetrics).states : {};
 
   return (
-    <div className="min-h-full bg-dark-900 pb-12 text-slate-100">
+    <div className="min-h-screen bg-dark-900 pb-12 text-slate-100">
+      {/* Verification Hub Modal */}
+      <VerificationModal 
+        isOpen={showVerification} 
+        onClose={() => setShowVerification(false)} 
+        metrics={activeMetrics} 
+        isPrometheusConnected={isPrometheusConnected} 
+        selectedSystem={selectedSystem} 
+      />
+
       {/* Top Header Navigation */}
       <header className="border-b border-slate-800/80 bg-dark-800/40 backdrop-blur-md sticky top-0 z-50 shadow-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -201,7 +296,7 @@ export function App() {
             </div>
 
             {/* Header Controls & Status */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {isPrometheusConnected ? (
                 <div className="hidden md:flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
                   <Server className="h-3.5 w-3.5" />
@@ -214,12 +309,36 @@ export function App() {
                 </div>
               )}
 
+              {/* Verify Telemetry Button */}
               <button
-                onClick={() => setView('landing')}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-dark-700/40 hover:bg-dark-700/70 px-4 py-2 text-xs font-bold text-slate-300 transition-all"
+                onClick={() => setShowVerification(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/25 px-3 py-2 text-xs font-bold text-blue-400 transition-all"
               >
-                <Home className="h-4 w-4" />
-                Home
+                <ShieldCheck className="h-4 w-4" />
+                Verify Telemetry
+              </button>
+
+              {/* User Badge */}
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/85 border border-slate-800/80 text-xs">
+                {user.username === 'admin' ? (
+                  <UserIcon className="h-4 w-4 text-blue-400" />
+                ) : (
+                  <Wrench className="h-4 w-4 text-emerald-400" />
+                )}
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold leading-none">{user.role}</p>
+                  <p className="text-[9px] text-slate-500 mt-0.5 font-mono">@{user.username}</p>
+                </div>
+              </div>
+
+              {/* Logout Button */}
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-dark-700/40 hover:bg-rose-950/30 hover:border-rose-500/30 hover:text-rose-400 px-3 py-2 text-xs font-bold text-slate-300 transition-all"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden md:inline">Logout</span>
               </button>
             </div>
           </div>
@@ -355,4 +474,52 @@ export function App() {
     </div>
   );
 }
+
+// Router and Authentication Guard Wrapper
+export function AppContent() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('aiops_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage onLaunch={() => navigate('/login')} />} />
+      <Route path="/login" element={
+        <LoginPage 
+          onLogin={(userData) => {
+            setUser(userData);
+            localStorage.setItem('aiops_user', JSON.stringify(userData));
+            navigate('/dashboard');
+          }} 
+          onBack={() => navigate('/')} 
+        />
+      } />
+      <Route path="/dashboard" element={
+        user ? (
+          <DashboardView 
+            user={user} 
+            onLogout={() => {
+              setUser(null);
+              localStorage.removeItem('aiops_user');
+              navigate('/');
+            }} 
+          />
+        ) : (
+          <Navigate to="/login" replace />
+        )
+      } />
+    </Routes>
+  );
+}
+
+export function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
+  );
+}
+
 export default App;

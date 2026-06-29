@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, Lock, User, AlertTriangle } from 'lucide-react';
+import { Layers, Lock, User, AlertTriangle, Shield, Wrench } from 'lucide-react';
 
 export function LoginPage({ onLogin, onBack }) {
   const [username, setUsername] = useState('admin');
@@ -14,7 +14,17 @@ export function LoginPage({ onLogin, onBack }) {
 
     setTimeout(() => {
       if (username === 'admin' && password === 'admin') {
-        onLogin();
+        onLogin({
+          username: 'admin',
+          role: 'System Administrator',
+          defaultSystem: 'production'
+        });
+      } else if (username === 'operator' && password === 'operator') {
+        onLogin({
+          username: 'operator',
+          role: 'Field Engineer',
+          defaultSystem: 'host'
+        });
       } else {
         setError('Invalid operator credentials. Access denied.');
         setLoading(false);
@@ -23,12 +33,13 @@ export function LoginPage({ onLogin, onBack }) {
   };
 
   return (
-    <div className="relative min-h-full bg-[#070A13] flex flex-col items-center justify-center text-slate-100 px-4">
+    <div className="relative min-h-screen bg-[#070A13] flex flex-col items-center justify-center text-slate-100 px-4 overflow-hidden">
       {/* Glow Orbs */}
       <div className="absolute top-1/4 left-1/3 h-96 w-96 rounded-full bg-blue-600/10 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/3 h-96 w-96 rounded-full bg-purple-600/10 blur-[100px] pointer-events-none" />
       
       {/* Login Card */}
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-dark-800/80 p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+      <div className="w-full max-w-md rounded-2xl border border-slate-800/80 bg-dark-800/80 p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
         <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-blue-500/10 blur-xl" />
 
         <div className="flex flex-col items-center text-center">
@@ -59,8 +70,8 @@ export function LoginPage({ onLogin, onBack }) {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
-                className="block w-full rounded-xl border border-slate-800 bg-dark-900/60 py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="admin or operator"
+                className="block w-full rounded-xl border border-slate-800 bg-[#0c1020] py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
             </div>
           </div>
@@ -78,8 +89,21 @@ export function LoginPage({ onLogin, onBack }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="block w-full rounded-xl border border-slate-800 bg-dark-900/60 py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-xl border border-slate-800 bg-[#0c1020] py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
               />
+            </div>
+          </div>
+
+          {/* Operator Guide Box */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4.5 text-xs text-slate-400 space-y-2">
+            <p className="font-bold text-slate-300">Available Operator Profiles:</p>
+            <div className="flex items-center justify-between text-[11px] border-b border-slate-800 pb-1.5">
+              <span className="flex items-center gap-1"><Shield className="h-3 w-3 text-blue-400" /> admin / admin</span>
+              <span className="text-slate-500">System Administrator</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="flex items-center gap-1"><Wrench className="h-3 w-3 text-emerald-400" /> operator / operator</span>
+              <span className="text-slate-500">Field Engineer</span>
             </div>
           </div>
 
