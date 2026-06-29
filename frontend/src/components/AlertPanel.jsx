@@ -8,7 +8,7 @@ const SEVERITY_COLORS = {
   critical: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
 };
 
-export function AlertPanel({ activeAlert, alertHistory, logs }) {
+export function AlertPanel({ activeAlert, alertHistory, logs, predictiveAlerts = [] }) {
   const terminalRef = useRef(null);
 
   // Auto-scroll terminal to bottom only if user is already near the bottom
@@ -33,7 +33,7 @@ export function AlertPanel({ activeAlert, alertHistory, logs }) {
               Insights & Alert Correlation
             </h2>
 
-            {!activeAlert ? (
+            {!activeAlert && predictiveAlerts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="rounded-full bg-emerald-500/10 border border-emerald-500/20 p-4 text-emerald-400 animate-pulse">
                   <ShieldCheck className="h-10 w-10" />
@@ -45,53 +45,65 @@ export function AlertPanel({ activeAlert, alertHistory, logs }) {
               </div>
             ) : (
               <div className="mt-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`rounded-full p-2.5 ${activeAlert.severity === 'critical' || activeAlert.severity === 'high' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
-                      <AlertOctagon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-white uppercase tracking-wider">{activeAlert.title}</h3>
-                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                        Detected at {new Date(activeAlert.timestamp).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${SEVERITY_COLORS[activeAlert.severity]}`}>
-                    {activeAlert.severity}
-                  </span>
-                </div>
+                {(() => {
+                  const alert = activeAlert || predictiveAlerts[0];
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`rounded-full p-2.5 ${alert.isPredictive ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse' : alert.severity === 'critical' || alert.severity === 'high' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                            <AlertOctagon className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">{alert.title}</h3>
+                            <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                              {alert.isPredictive 
+                                ? `Forecasting breach in ~${alert.secondsToBreach}s` 
+                                : `Detected at ${new Date(alert.timestamp).toLocaleTimeString()}`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${alert.isPredictive ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' : SEVERITY_COLORS[alert.severity]}`}>
+                          {alert.isPredictive ? 'FORECAST' : alert.severity}
+                        </span>
+                      </div>
 
-                {/* Explanations & Actions */}
-                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl bg-dark-900/50 p-4 border border-slate-800/50">
-                    <h4 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-300">
-                      <Terminal className="h-3.5 w-3.5 text-cyan-400" />
-                      Probable Root Cause
-                    </h4>
-                    <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-                      {activeAlert.explanation}
-                    </p>
-                  </div>
+                      {/* Explanations & Actions */}
+                      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="rounded-xl bg-dark-900/50 p-4 border border-slate-800/50">
+                          <h4 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                            <Terminal className="h-3.5 w-3.5 text-cyan-400" />
+                            {alert.isPredictive ? 'Predictive Analysis (Linear Regression)' : 'Probable Root Cause'}
+                          </h4>
+                          <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                            {alert.explanation}
+                          </p>
+                        </div>
 
-                  <div className="rounded-xl bg-dark-900/50 p-4 border border-slate-800/50">
-                    <h4 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-300">
-                      <Activity className="h-3.5 w-3.5 text-emerald-400" />
-                      Remediation Action
-                    </h4>
-                    <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-                      {activeAlert.recommendation}
-                    </p>
-                  </div>
-                </div>
+                        <div className="rounded-xl bg-dark-900/50 p-4 border border-slate-800/50">
+                          <h4 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                            <Activity className="h-3.5 w-3.5 text-emerald-400" />
+                            Proactive Remediation Action
+                          </h4>
+                          <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                            {alert.recommendation}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>
 
-          {activeAlert && (
+          {(activeAlert || (predictiveAlerts && predictiveAlerts.length > 0)) && (
             <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-slate-700/50 pt-4">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-2">Correlated Telemetry:</span>
-              {activeAlert.affectedMetrics.map(metric => (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-2">
+                {activeAlert ? 'Correlated Telemetry:' : 'Trend-Tracked Metric:'}
+              </span>
+              {(activeAlert || predictiveAlerts[0]).affectedMetrics.map(metric => (
                 <span key={metric} className="rounded bg-slate-900 border border-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-300 uppercase tracking-wider">
                   {metric}
                 </span>

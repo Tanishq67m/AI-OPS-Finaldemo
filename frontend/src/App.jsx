@@ -3,7 +3,7 @@ import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'reac
 import { useMetricsPoller } from './hooks/useMetricsPoller';
 import { detectAnomalies } from './utils/anomalyDetector';
 import { correlateAnomalies } from './utils/correlationEngine';
-import { enrichAlert } from './utils/insightsEngine';
+import { enrichAlert, getPredictiveInsights } from './utils/insightsEngine';
 import { MetricCard } from './components/MetricCard';
 import { ControlPanel } from './components/ControlPanel';
 import { AlertPanel } from './components/AlertPanel';
@@ -177,8 +177,8 @@ function DashboardView({ user, onLogout }) {
   useEffect(() => {
     if (!activeMetrics) return;
 
-    // 1. Detect individual anomalies
-    const { states: anomalyStates, list: anomalyList } = detectAnomalies(activeMetrics);
+    // 1. Detect individual anomalies with history for Z-score calculation
+    const { states: anomalyStates, list: anomalyList } = detectAnomalies(activeMetrics, history);
 
     // Log the scrape event and any individual breaches
     addLog('info', `[${selectedSystem.toUpperCase()}] Scraped telemetry. CPU: ${activeMetrics.cpu_usage_percent}%, Latency: ${activeMetrics.http_response_latency_ms}ms, Errors: ${activeMetrics.application_error_rate_percent}%`);
@@ -252,7 +252,7 @@ function DashboardView({ user, onLogout }) {
     anomaly: 0.7
   };
 
-  const anomalyStates = activeMetrics ? detectAnomalies(activeMetrics).states : {};
+  const anomalyStates = activeMetrics ? detectAnomalies(activeMetrics, history).states : {};
 
   return (
     <div className="min-h-screen bg-dark-900 pb-12 text-slate-100">
@@ -467,6 +467,7 @@ function DashboardView({ user, onLogout }) {
             activeAlert={activeAlert}
             alertHistory={alertHistory}
             logs={logs}
+            predictiveAlerts={getPredictiveInsights(history)}
           />
         </section>
 

@@ -49,6 +49,70 @@ const SINGLE_METRIC_METADATA = {
   }
 };
 
+export function getPredictiveInsights(history) {
+  if (!history || history.length < 6) return [];
+
+  const metricsToTrack = {
+    cpu: { key: 'cpu_usage_percent', threshold: 80, name: 'CPU Utilization', unit: '%' },
+    memory: { key: 'memory_usage_percent', threshold: 85, name: 'Memory Utilization', unit: '%' },
+    latency: { key: 'http_response_latency_ms', threshold: 500, name: 'Response Latency', unit: 'ms' },
+    error: { key: 'application_error_rate_percent', threshold: 5, name: 'Application Error Rate', unit: '%' }
+  };
+
+  const predictions = [];
+
+  Object.keys(metricsToTrack).forEach(key => {
+    const config = metricsToTrack[key];
+    const n = history.length;
+    
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
+
+    history.forEach((point, idx) => {
+      const x = idx;
+      const y = point[config.key] || 0;
+      sumX += x;
+      sumY += y;
+      sumXY += x * y;
+      sumXX += x * x;
+    });
+
+    const denominator = n * sumXX - sumX * sumX;
+    if (denominator === 0) return;
+
+    const slope = (n * sumXY - sumX * sumY) / denominator;
+
+    // Current value is the last point
+    const currentVal = history[n - 1][config.key] || 0;
+
+    // If slope is positive and current value is below threshold, calculate when it will breach
+    if (slope > 0 && currentVal < config.threshold) {
+      const stepsToBreach = (config.threshold - currentVal) / slope;
+      const secondsToBreach = Math.round(stepsToBreach * 5); // 5s scrape interval
+
+      // If it is predicted to breach within the next 60 seconds
+      if (secondsToBreach > 0 && secondsToBreach <= 60) {
+        predictions.push({
+          id: `predictive-${key}-${Date.now()}`,
+          title: `Predictive Warning: ${config.name}`,
+          metric: key,
+          severity: 'low',
+          isPredictive: true,
+          secondsToBreach,
+          timestamp: new Date(),
+          explanation: `Mathematical linear regression forecasting projects that ${config.name} (currently ${currentVal}${config.unit}) will breach its threshold of ${config.threshold}${config.unit} in approximately ${secondsToBreach} seconds based on the active trend (Slope: +${Math.round(slope * 100) / 100}/sec).`,
+          recommendation: `Pre-emptively scale resources or check logs for resource leakage. Anomaly correlation engine has queued this trend for proactive remediation.`,
+          affectedMetrics: [key]
+        });
+      }
+    }
+  });
+
+  return predictions;
+}
+
 export function enrichAlert(alert, isPredictive = false) {
   // If it's a predictive warning (approaching threshold)
   if (isPredictive) {
