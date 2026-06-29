@@ -386,7 +386,7 @@ export function LandingPage({ onLaunch }) {
               To query the host machine's CPU usage percentage directly from the Prometheus TSDB, copy and paste this query into Prometheus at <span className="text-blue-400 font-mono text-[11px]">http://localhost:9090</span>:
             </p>
             <div className="mt-4 bg-[#03050a] rounded-xl p-4 border border-slate-950 font-mono text-[10px] text-emerald-400 select-all break-all leading-relaxed">
-              100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)
+              {"100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)"}
             </div>
             <p className="text-[10px] text-slate-500 mt-4 leading-relaxed">
               This query takes the rate of idle CPU ticks over the last minute, averages it, multiplies by 100 to get a percentage, and subtracts it from 100 to calculate the active CPU load.
