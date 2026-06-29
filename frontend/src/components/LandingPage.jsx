@@ -21,8 +21,8 @@ export function LandingPage({ onLaunch }) {
 
   const team = [
     { name: 'Tanishq Mohod', id: 'B400780331', role: 'Lead Architect & Backend', desc: 'Designed container orchestration and Express telemetry pipelines.' },
-    { name: 'Vaishnavi Landge', id: 'B400780292', role: 'Frontend & UI Designer', desc: 'Crafted the premium glassmorphic UI and Recharts telemetry panels.' },
-    { name: 'Gayatri Parkhe', id: 'B400780302', role: 'DevOps & Observability', desc: 'Configured Prometheus targets, alert rules, and Grafana dashboards.' },
+    { name: 'Vaishnavi Landge', id: 'B400780292', role: 'DevOps & Observability', desc: 'Configured Prometheus targets, alert rules, and Grafana dashboards.' },
+    { name: 'Gayatri Parkhe', id: 'B400780302', role: 'Frontend & UI Designer', desc: 'Crafted the premium glassmorphic UI and Recharts telemetry panels.' },
     { name: 'Atharv Bhalerao', id: 'B400780272', role: 'QA Lead & AIOps Logic', desc: 'Developed client-side anomaly detection and correlation engines.' },
   ];
 
