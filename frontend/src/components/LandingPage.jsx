@@ -19,6 +19,13 @@ import {
 export function LandingPage({ onLaunch }) {
   const [activeFaq, setActiveFaq] = useState(null);
 
+  const scrollToSection = (id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   const team = [
     { name: 'Tanishq Mohod', id: 'B400780331', role: 'Lead Architect & Backend', desc: 'Designed container orchestration and Express telemetry pipelines.' },
     { name: 'Vaishnavi Landge', id: 'B400780292', role: 'DevOps & Observability', desc: 'Configured Prometheus targets, alert rules, and Grafana dashboards.' },
@@ -101,11 +108,11 @@ export function LandingPage({ onLaunch }) {
 
           {/* Center Navigation Links */}
           <nav className="hidden md:flex items-center gap-8 text-xs font-bold text-slate-400">
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#architecture" className="hover:text-white transition-colors">Architecture</a>
-            <a href="#verification" className="hover:text-white transition-colors">Verification</a>
-            <a href="#team" className="hover:text-white transition-colors">Project Team</a>
-            <a href="#faq" className="hover:text-white transition-colors">Deployment FAQ</a>
+            <button onClick={() => scrollToSection('features')} className="hover:text-white transition-colors focus:outline-none">Features</button>
+            <button onClick={() => scrollToSection('architecture')} className="hover:text-white transition-colors focus:outline-none">Architecture</button>
+            <button onClick={() => scrollToSection('verification')} className="hover:text-white transition-colors focus:outline-none">Verification</button>
+            <button onClick={() => scrollToSection('team')} className="hover:text-white transition-colors focus:outline-none">Project Team</button>
+            <button onClick={() => scrollToSection('faq')} className="hover:text-white transition-colors focus:outline-none">Deployment FAQ</button>
           </nav>
 
           {/* Right Action Button */}
@@ -150,12 +157,12 @@ export function LandingPage({ onLaunch }) {
             <span>Launch Command Center</span>
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </button>
-          <a
-            href="#architecture"
+          <button
+            onClick={() => scrollToSection('architecture')}
             className="rounded-full border border-slate-800 bg-slate-900/40 px-8 py-4 text-sm font-bold text-slate-300 hover:bg-slate-900/80 hover:text-white transition-all"
           >
             Explore Architecture
-          </a>
+          </button>
         </div>
 
         {/* Floating Interactive SVG Nodes (matching the reference design layout) */}
